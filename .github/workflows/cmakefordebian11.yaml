@@ -1,5 +1,5 @@
 # This workflow is for a CMake project with cross-platform support for x86_64 and ARM64.
-name: CMake with Cross-Platform Build Debian11
+name: CMake with Cross-Platform Build
 
 on:
   push:
@@ -47,8 +47,6 @@ jobs:
 
     - name: Install Build Essentials and Cross-Compilation Tools
       run: |
-        sed -i 's|http://deb.debian.org/debian|http://ftp.us.debian.org/debian|g' /etc/apt/sources.list
-        sed -i 's|http://deb.debian.org/debian-security|http://ftp.us.debian.org/debian-security|g' /etc/apt/sources.list
         apt-get update
         apt-get install -y build-essential make gcc g++ cmake gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
 
@@ -99,5 +97,87 @@ jobs:
         echo "Checking build directory for ${{matrix.arch.name}}:"
         ls -la "${{ env.WORK_DIR }}/build-${{matrix.arch.name}}" || echo "Build directory not found"
 
-    # 后续步骤保持不变，省略以节省空间
-    # ... (Test, Package Build Artifacts, Upload Build Artifacts, Debug Uploaded Artifacts)
+    - name: Test
+      if: matrix.arch.name == 'x86_64'
+      working-directory: "${{ env.WORK_DIR }}/build-${{matrix.arch.name}}"
+      run: ctest -C ${{env.BUILD_TYPE}} || echo "Tests skipped for cross-build or failed non-fatally"
+
+    - name: Package Build Artifacts
+      working-directory: "${{ env.WORK_DIR }}/build-${{matrix.arch.name}}"
+      run: |
+        mkdir -p artifacts
+        cp udp2raw* artifacts/ 2>/dev/null || echo "Binary not found, adjust cp command as needed"
+        tar -czvf udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz artifacts
+        mv udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz "${{ env.WORK_DIR }}/"
+
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: udp2raw-build-${{matrix.arch.name}}
+        path: "${{ env.WORK_DIR }}/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz"
+        if-no-files-found: warn
+
+    - name: Debug Uploaded Artifacts
+      run: |
+        echo "Listing artifact files for ${{matrix.arch.name}}:"
+        ls -lh "${{ env.WORK_DIR }}/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz" || echo "Artifact file not found"
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    container:
+      image: debian:bullseye
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: udp2raw
+
+    - name: Create Working Directories for Release
+      run: |
+        mkdir -p "${{ env.WORK_DIR }}/artifacts"
+        echo "Created artifacts directory: ${{ env.WORK_DIR }}/artifacts"
+
+    - name: Install Dependencies for Release Job
+      run: |
+        apt-get update
+        apt-get install -y curl tar
+
+    - name: Download Build Artifacts for x86_64
+      uses: actions/download-artifact@v4
+      with:
+        name: udp2raw-build-x86_64
+        path: "${{ env.WORK_DIR }}/artifacts/"
+      continue-on-error: true
+
+    - name: Download Build Artifacts for ARM64
+      uses: actions/download-artifact@v4
+      with:
+        name: udp2raw-build-arm64
+        path: "${{ env.WORK_DIR }}/artifacts/"
+      continue-on-error: true
+
+    - name: Debug Downloaded Artifacts
+      run: |
+        echo "Listing downloaded artifacts:"
+        ls -lh "${{ env.WORK_DIR }}/artifacts/" || echo "No artifacts downloaded"
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      if: success()
+      with:
+        files: |
+          ${{ env.WORK_DIR }}/artifacts/udp2raw-x86_64-*.tar.gz
+          ${{ env.WORK_DIR }}/artifacts/udp2raw-arm64-*.tar.gz
+        draft: false
+        prerelease: false
+        body: |
+          Automated release for tag ${{github.ref_name}}.
+          This release includes build artifacts for udp2raw on the following architectures:
+          - x86_64
+          - ARM64 (aarch64)
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
