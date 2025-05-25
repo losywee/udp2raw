@@ -1,5 +1,5 @@
 # This workflow is for a CMake project with cross-platform support for x86_64 and ARM64.
-name: CMake with Cross-Platform Build
+name: CMake with Cross-Platform Build Debian11
 
 on:
   push:
