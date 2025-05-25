@@ -31,7 +31,7 @@ jobs:
 
     - name: Create Working Directories
       run: |
-        mkdir -p "${{ env.WORK_DIR }}"
+        mkdir -p "${{ env.WORK_DIR }}/build-${{matrix.arch.name}}"
         echo "Created working directory: ${{ env.WORK_DIR }}"
 
     - name: Debug Directory Structure After Checkout
@@ -49,6 +49,8 @@ jobs:
       run: |
         apt-get update
         apt-get install -y build-essential make gcc g++ cmake gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
+        # Avoid installing libasan or related sanitizer libraries if not needed
+        apt-get clean && rm -rf /var/lib/apt/lists/*
 
     - name: Debug Toolchain and Build Tools Availability
       run: |
@@ -81,12 +83,13 @@ jobs:
 
     - name: Configure CMake
       run: |
-        mkdir -p "${{ env.WORK_DIR }}/build-${{matrix.arch.name}}"
-        # Explicitly specify the source directory (-S) where CMakeLists.txt is located
         cmake -S "${{ github.workspace }}/udp2raw" \
               -B "${{ env.WORK_DIR }}/build-${{matrix.arch.name}}" \
               -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
               -G "Unix Makefiles" \
+              -DCMAKE_C_FLAGS="-fno-sanitize=address" \
+              -DCMAKE_CXX_FLAGS="-fno-sanitize=address" \
+              -DCMAKE_EXE_LINKER_FLAGS="-fno-sanitize=address" \
               ${{matrix.arch.extra_cmake_args}} || { echo "CMake configuration failed for ${{matrix.arch.name}}"; exit 1; }
 
     - name: Build
