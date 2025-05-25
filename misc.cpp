@@ -4,7 +4,9 @@
  *  Created on: Sep 23, 2017
  *      Author: root
  */
-#include "git_version.h"
+#ifndef GIT_VERSION
+#define GIT_VERSION "unknown"
+#endif
 #include "common.h"
 #include "encrypt.h"
 #include "misc.h"
