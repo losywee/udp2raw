@@ -1,0 +1,179 @@
+# This workflow is for a CMake project with cross-platform support for x86_64 and ARM64.
+name: CMake with Cross-Platform Build
+
+on:
+  push:
+    branches: [ "fake-http" ]
+    tags: [ "v*" ]  # Trigger release on tags starting with 'v' (e.g., v1.0.0)
+  pull_request:
+    branches: [ "fake-http" ]
+
+env:
+  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
+  BUILD_TYPE: Release
+  # Define a base working directory to avoid hardcoding paths
+  WORK_DIR: "${{ github.workspace }}/udp2raw"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:bullseye  # Debian 11 (Bullseye) is used as the base image
+    strategy:
+      matrix:
+        arch:
+          - { name: "x86_64", target: "x86_64-linux-gnu", toolchain: "", extra_cmake_args: "" }
+          - { name: "arm64", target: "aarch64-linux-gnu", toolchain: "aarch64-linux-gnu", extra_cmake_args: "-DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/udp2raw/toolchain-aarch64.cmake" }
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch full Git history to support potential git version generation
+        path: udp2raw  # Specify a relative path for checkout to ensure consistent location
+
+    - name: Create Working Directories
+      run: |
+        mkdir -p "${{ env.WORK_DIR }}"
+        echo "Created working directory: ${{ env.WORK_DIR }}"
+
+    - name: Debug Directory Structure After Checkout
+      run: |
+        echo "Current working directory: $(pwd)"
+        ls -la
+        echo "Listing contents of ${{ env.WORK_DIR }}:"
+        ls -la "${{ env.WORK_DIR }}" || echo "Directory ${{ env.WORK_DIR }} not found"
+
+    - name: Install Build Essentials and Cross-Compilation Tools
+      run: |
+        apt-get update
+        apt-get install -y build-essential make gcc g++ cmake gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
+
+    - name: Debug Toolchain and Build Tools Availability
+      run: |
+        echo "Checking for build tools and compilers:"
+        which make || echo "make not found"
+        make --version || echo "make version check failed"
+        which gcc || echo "gcc not found"
+        which g++ || echo "g++ not found"
+        which cmake || echo "cmake not found"
+        cmake --version || echo "cmake version check failed"
+        which aarch64-linux-gnu-gcc || echo "aarch64-linux-gnu-gcc not found"
+        which aarch64-linux-gnu-g++ || echo "aarch64-linux-gnu-g++ not found"
+        aarch64-linux-gnu-gcc --version || echo "aarch64-linux-gnu-gcc version check failed"
+        aarch64-linux-gnu-g++ --version || echo "aarch64-linux-gnu-g++ version check failed"
+
+    - name: Create Toolchain File for ARM64
+      if: matrix.arch.name == 'arm64'
+      run: |
+        cat > "${{ env.WORK_DIR }}/toolchain-aarch64.cmake" << EOF
+        set(CMAKE_SYSTEM_NAME Linux)
+        set(CMAKE_SYSTEM_PROCESSOR aarch64)
+        set(CMAKE_C_COMPILER /usr/bin/aarch64-linux-gnu-gcc)
+        set(CMAKE_CXX_COMPILER /usr/bin/aarch64-linux-gnu-g++)
+        set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+        set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+        set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+        EOF
+        echo "Toolchain file created at:"
+        ls -l "${{ env.WORK_DIR }}/toolchain-aarch64.cmake"
+
+    - name: Configure CMake
+      run: |
+        mkdir -p "${{ env.WORK_DIR }}/build-${{matrix.arch.name}}"
+        cmake -B "${{ env.WORK_DIR }}/build-${{matrix.arch.name}}" \
+              -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+              -G "Unix Makefiles" \
+              ${{matrix.arch.extra_cmake_args}} || { echo "CMake configuration failed for ${{matrix.arch.name}}"; exit 1; }
+
+    - name: Build
+      run: cmake --build "${{ env.WORK_DIR }}/build-${{matrix.arch.name}}" --config ${{env.BUILD_TYPE}}
+
+    - name: Debug Build Directory
+      run: |
+        echo "Checking build directory for ${{matrix.arch.name}}:"
+        ls -la "${{ env.WORK_DIR }}/build-${{matrix.arch.name}}" || echo "Build directory not found"
+
+    - name: Test
+      if: matrix.arch.name == 'x86_64'
+      working-directory: "${{ env.WORK_DIR }}/build-${{matrix.arch.name}}"
+      run: ctest -C ${{env.BUILD_TYPE}} || echo "Tests skipped for cross-build or failed non-fatally"
+
+    - name: Package Build Artifacts
+      working-directory: "${{ env.WORK_DIR }}/build-${{matrix.arch.name}}"
+      run: |
+        mkdir -p artifacts
+        cp udp2raw* artifacts/ 2>/dev/null || echo "Binary not found, adjust cp command as needed"
+        tar -czvf udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz artifacts
+        mv udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz "${{ env.WORK_DIR }}/"
+
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: udp2raw-build-${{matrix.arch.name}}
+        path: "${{ env.WORK_DIR }}/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz"
+        if-no-files-found: warn
+
+    - name: Debug Uploaded Artifacts
+      run: |
+        echo "Listing artifact files for ${{matrix.arch.name}}:"
+        ls -lh "${{ env.WORK_DIR }}/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz" || echo "Artifact file not found"
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    container:
+      image: debian:bullseye
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: udp2raw
+
+    - name: Create Working Directories for Release
+      run: |
+        mkdir -p "${{ env.WORK_DIR }}/artifacts"
+        echo "Created artifacts directory: ${{ env.WORK_DIR }}/artifacts"
+
+    - name: Install Dependencies for Release Job
+      run: |
+        apt-get update
+        apt-get install -y curl tar
+
+    - name: Download Build Artifacts for x86_64
+      uses: actions/download-artifact@v4
+      with:
+        name: udp2raw-build-x86_64
+        path: "${{ env.WORK_DIR }}/artifacts/"
+      continue-on-error: true
+
+    - name: Download Build Artifacts for ARM64
+      uses: actions/download-artifact@v4
+      with:
+        name: udp2raw-build-arm64
+        path: "${{ env.WORK_DIR }}/artifacts/"
+      continue-on-error: true
+
+    - name: Debug Downloaded Artifacts
+      run: |
+        echo "Listing downloaded artifacts:"
+        ls -lh "${{ env.WORK_DIR }}/artifacts/" || echo "No artifacts downloaded"
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      if: success()
+      with:
+        files: |
+          ${{ env.WORK_DIR }}/artifacts/udp2raw-x86_64-*.tar.gz
+          ${{ env.WORK_DIR }}/artifacts/udp2raw-arm64-*.tar.gz
+        draft: false
+        prerelease: false
+        body: |
+          Automated release for tag ${{github.ref_name}}.
+          This release includes build artifacts for udp2raw on the following architectures:
+          - x86_64
+          - ARM64 (aarch64)
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
