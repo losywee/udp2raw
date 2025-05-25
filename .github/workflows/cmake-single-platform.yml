@@ -27,14 +27,6 @@ jobs:
       with:
         fetch-depth: 0  # Fetch full Git history to support potential git version generation
 
-    - name: Create dummy git_version.h
-      # Create a dummy git_version.h to handle cases where Git metadata is unavailable or not used
-      run: |
-        echo '#ifndef GIT_VERSION_H' > git_version.h
-        echo '#define GIT_VERSION_H' >> git_version.h
-        echo '#define gitversion "unknown"' >> git_version.h
-        echo '#endif // GIT_VERSION_H' >> git_version.h
-        mv git_version.h /home/runner/work/udp2raw/udp2raw/git_version.h
 
     - name: Install Build Essentials and Cross-Compilation Tools
       # Install build tools and toolchain for ARM64
