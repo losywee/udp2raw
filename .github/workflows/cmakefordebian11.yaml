@@ -48,9 +48,6 @@ jobs:
         echo "Checking alternative paths for CMakeLists.txt:"
         find /__w/ -name "CMakeLists.txt" -type f || echo "CMakeLists.txt not found in /__w/"
         find /home/runner/work/ -name "CMakeLists.txt" -type f || echo "CMakeLists.txt not found in /home/runner/work/"
-        echo "Checking for Makefile in ${{ github.workspace }}/udp2raw:"
-        ls -l "${{ github.workspace }}/udp2raw/Makefile" || echo "Makefile not found in ${{ github.workspace }}/udp2raw"
-        find /__w/ -name "Makefile" -type f || echo "Makefile not found in /__w/"
 
     - name: Install Build Essentials and Cross-Compilation Tools
       run: |
