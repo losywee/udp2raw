@@ -72,7 +72,7 @@ jobs:
       if: matrix.arch.name == 'arm64'
       run: |
         cat > "$(pwd)/udp2raw/toolchain-aarch64.cmake" << EOF
-        set(CMAKE_SYSTEM_NAME bizony)
+        set(CMAKE_SYSTEM_NAME Linux)
         set(CMAKE_SYSTEM_PROCESSOR aarch64)
         set(CMAKE_C_COMPILER /usr/bin/aarch64-linux-gnu-gcc)
         set(CMAKE_CXX_COMPILER /usr/bin/aarch64-linux-gnu-g++)
@@ -105,11 +105,11 @@ jobs:
 
     - name: Test
       if: matrix.arch.name == 'x86_64'
-      working-directory: "$(pwd)/udp2raw/build-${{matrix.arch.name}}"
+      working-directory: udp2raw/build-${{matrix.arch.name}}
       run: ctest -C ${{env.BUILD_TYPE}} || echo "Tests skipped for cross-build or failed non-fatally"
 
     - name: Package Build Artifacts
-      working-directory: "$(pwd)/udp2raw/build-${{matrix.arch.name}}"
+      working-directory: udp2raw/build-${{matrix.arch.name}}
       run: |
         mkdir -p artifacts
         cp udp2raw* artifacts/ 2>/dev/null || echo "Binary not found, adjust cp command as needed"
