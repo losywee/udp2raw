@@ -27,22 +27,6 @@ jobs:
       with:
         fetch-depth: 0  # Fetch full Git history to support potential git version generation
 
-    - name: Debug Working Directory
-      # Debug the current working directory to confirm paths
-      run: |
-        echo "Current working directory:"
-        pwd
-        echo "Listing contents of working directory:"
-        ls -la
-
-    - name: Create dummy git_version.h
-      # Create a dummy git_version.h to handle cases where Git metadata is unavailable or not used
-      run: |
-        echo '#ifndef GIT_VERSION_H' > git_version.h
-        echo '#define GIT_VERSION_H' >> git_version.h
-        echo '#define gitversion "unknown"' >> git_version.h
-        echo '#endif // GIT_VERSION_H' >> git_version.h
-        mv git_version.h /home/runner/work/udp2raw/udp2raw/git_version.h
 
     - name: Install Build Essentials and Cross-Compilation Tools
       # Install build tools and toolchain for ARM64
@@ -78,8 +62,6 @@ jobs:
         EOF
         echo "Toolchain file created at:"
         ls -l /home/runner/work/udp2raw/udp2raw/toolchain-aarch64.cmake
-        echo "Contents of toolchain file:"
-        cat /home/runner/work/udp2raw/udp2raw/toolchain-aarch64.cmake
 
     - name: Configure CMake
       # Configure CMake for the specified architecture with explicit generator
@@ -108,21 +90,21 @@ jobs:
         # Adjust the following line based on the actual binary/output files produced by your build
         cp udp2raw* artifacts/ 2>/dev/null || echo "Binary not found, adjust cp command as needed"
         tar -czvf udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz artifacts
-        mv udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz /home/runner/work/udp2raw/udp2raw/artifacts/
+        mv udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz /home/runner/work/udp2raw/udp2raw/
 
     - name: Upload Build Artifacts
       # Upload the packaged artifacts for download or use in release
       uses: actions/upload-artifact@v4
       with:
         name: udp2raw-build-${{matrix.arch.name}}
-        path: /home/runner/work/udp2raw/udp2raw/artifacts/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz
+        path: /home/runner/work/udp2raw/udp2raw/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz
         if-no-files-found: warn  # Warn instead of fail if no files are found to upload
 
     - name: Debug Uploaded Artifacts
       # Debug step to list files being uploaded for troubleshooting
       run: |
         echo "Listing artifact files for ${{matrix.arch.name}}:"
-        ls -lh /home/runner/work/udp2raw/udp2raw/artifacts/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz || echo "Artifact file not found"
+        ls -lh /home/runner/work/udp2raw/udp2raw/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz || echo "Artifact file not found"
 
   release:
     # Only create a release if the event is a push to a tag starting with 'v'
