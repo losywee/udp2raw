@@ -16,23 +16,24 @@ jobs:
   build:
     # Build for multiple architectures using a matrix strategy
     runs-on: ubuntu-latest
+    container:
+      image: debian:bullseye
     strategy:
       matrix:
         arch:
-          - { name: "x86_64", target: "x86_64-linux-gnu", toolchain: "", extra_cmake_args: "-DCMAKE_EXE_LINKER_FLAGS='-static'" }
-          - { name: "arm64", target: "aarch64-linux-gnu", toolchain: "aarch64-linux-gnu", extra_cmake_args: "-DCMAKE_TOOLCHAIN_FILE=/home/runner/work/udp2raw/udp2raw/toolchain-aarch64.cmake -DCMAKE_EXE_LINKER_FLAGS='-static'" }
+          - { name: "x86_64", target: "x86_64-linux-gnu", toolchain: "", extra_cmake_args: "" }
+          - { name: "arm64", target: "aarch64-linux-gnu", toolchain: "aarch64-linux-gnu", extra_cmake_args: "-DCMAKE_TOOLCHAIN_FILE=/home/runner/work/udp2raw/udp2raw/toolchain-aarch64.cmake" }
 
     steps:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0  # Fetch full Git history to support potential git version generation
 
-
     - name: Install Build Essentials and Cross-Compilation Tools
       # Install build tools and toolchain for ARM64
       run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential make gcc g++ gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
+        apt-get update
+        apt-get install -y build-essential make gcc g++ gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
 
     - name: Debug Toolchain and Build Tools Availability
       # Check if ARM64 compilers and make are installed
@@ -110,12 +111,19 @@ jobs:
     # Only create a release if the event is a push to a tag starting with 'v'
     needs: build
     runs-on: ubuntu-latest
+    container:
+      image: debian:bullseye
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write  # Required to create a release
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Install Dependencies for Release Job
+      run: |
+        apt-get update
+        apt-get install -y curl tar
 
     - name: Download Build Artifacts for x86_64
       uses: actions/download-artifact@v4
