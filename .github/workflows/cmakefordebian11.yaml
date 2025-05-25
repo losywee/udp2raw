@@ -28,6 +28,7 @@ jobs:
       with:
         fetch-depth: 0
         path: udp2raw  # Ensure code is checked out to a predictable path
+        repository: losywee/udp2raw
 
     - name: Create Working Directories
       run: |
@@ -44,12 +45,13 @@ jobs:
         ls -la "${{ github.workspace }}/udp2raw" || echo "Source directory not found"
         echo "Checking for CMakeLists.txt in ${{ github.workspace }}/udp2raw:"
         ls -l "${{ github.workspace }}/udp2raw/CMakeLists.txt" || echo "CMakeLists.txt not found"
+        echo "Checking parent directory for context:"
+        ls -la "${{ github.workspace }}" || echo "Parent directory not found"
 
     - name: Install Build Essentials and Cross-Compilation Tools
       run: |
         apt-get update
         apt-get install -y build-essential make gcc g++ cmake gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
-        # Avoid installing libasan or related sanitizer libraries if not needed
         apt-get clean && rm -rf /var/lib/apt/lists/*
 
     - name: Debug Toolchain and Build Tools Availability
@@ -138,6 +140,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         path: udp2raw
+        repository: losywee/udp2raw
 
     - name: Create Working Directories for Release
       run: |
