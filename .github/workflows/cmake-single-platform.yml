@@ -27,12 +27,19 @@ jobs:
       with:
         fetch-depth: 0  # Fetch full Git history to support potential git version generation
 
-    - name: Install Cross-Compilation Tools for ARM64
-      # Install necessary toolchain for ARM64 if building for arm64
-      if: matrix.arch.name == 'arm64'
+    - name: Install Build Essentials and Cross-Compilation Tools
+      # Install build tools and toolchain for ARM64 if building for arm64
       run: |
         sudo apt-get update
-        sudo apt-get install -y g++-aarch64-linux-gnu gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+        sudo apt-get install -y build-essential make g++-aarch64-linux-gnu gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+
+    - name: Debug Toolchain Availability
+      # Check if ARM64 compilers are installed
+      run: |
+        echo "Checking for aarch64 compilers:"
+        which aarch64-linux-gnu-gcc || echo "aarch64-linux-gnu-gcc not found"
+        which aarch64-linux-gnu-g++ || echo "aarch64-linux-gnu-g++ not found"
+        aarch64-linux-gnu-gcc --version || echo "aarch64-linux-gnu-gcc version check failed"
 
     - name: Create Toolchain File for ARM64
       # Create a toolchain file for cross-compiling to ARM64
@@ -47,6 +54,8 @@ jobs:
         set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
         set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
         EOF
+        echo "Toolchain file created at:"
+        ls -l ${{github.workspace}}/toolchain-aarch64.cmake
 
     - name: Configure CMake
       # Configure CMake for the specified architecture
@@ -54,7 +63,7 @@ jobs:
         mkdir -p ${{github.workspace}}/build-${{matrix.arch.name}}
         cmake -B ${{github.workspace}}/build-${{matrix.arch.name}} \
               -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
-              ${{matrix.arch.extra_cmake_args}}
+              ${{matrix.arch.extra_cmake_args}} || { echo "CMake configuration failed for ${{matrix.arch.name}}"; exit 1; }
 
     - name: Build
       # Build your program with the given configuration for the specified architecture
@@ -78,7 +87,7 @@ jobs:
 
     - name: Upload Build Artifacts
       # Upload the packaged artifacts for download or use in release
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v3
       with:
         name: udp2raw-build-${{matrix.arch.name}}
         path: ${{github.workspace}}/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz
@@ -89,51 +98,3 @@ jobs:
       run: |
         echo "Listing artifact files for ${{matrix.arch.name}}:"
         ls -lh ${{github.workspace}}/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz || echo "Artifact file not found"
-
-  release:
-    # Only create a release if the event is a push to a tag starting with 'v'
-    needs: build
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    permissions:
-      contents: write  # Required to create a release
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Download Build Artifacts for x86_64
-      uses: actions/download-artifact@v4
-      with:
-        name: udp2raw-build-x86_64
-        path: ${{github.workspace}}/artifacts/
-      continue-on-error: true  # Continue even if download fails for debugging
-
-    - name: Download Build Artifacts for ARM64
-      uses: actions/download-artifact@v4
-      with:
-        name: udp2raw-build-arm64
-        path: ${{github.workspace}}/artifacts/
-      continue-on-error: true  # Continue even if download fails for debugging
-
-    - name: Debug Downloaded Artifacts
-      # Debug step to list downloaded files for troubleshooting
-      run: |
-        echo "Listing downloaded artifacts:"
-        ls -lh ${{github.workspace}}/artifacts/ || echo "No artifacts downloaded"
-
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
-      if: success()  # Only run if previous steps succeed or are allowed to continue
-      with:
-        files: |
-          ${{github.workspace}}/artifacts/udp2raw-x86_64-*.tar.gz
-          ${{github.workspace}}/artifacts/udp2raw-arm64-*.tar.gz
-        draft: false
-        prerelease: false
-        body: |
-          Automated release for tag ${{github.ref_name}}.
-          This release includes build artifacts for udp2raw on the following architectures:
-          - x86_64
-          - ARM64 (aarch64)
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
