@@ -34,6 +34,14 @@ jobs:
       run: |
         mkdir -p /home/runner/work/udp2raw/udp2raw
 
+    - name: Debug Directory Structure After Checkout
+      # Debug step to check the directory structure after checkout
+      run: |
+        echo "Current working directory: $(pwd)"
+        ls -la
+        echo "Listing /home/runner/work:"
+        ls -la /home/runner/work || echo "Directory /home/runner/work not found"
+
     - name: Install Build Essentials and Cross-Compilation Tools
       # Install build tools, CMake, and toolchain for ARM64
       run: |
@@ -84,10 +92,16 @@ jobs:
       # Build your program with the given configuration for the specified architecture
       run: cmake --build /home/runner/work/udp2raw/udp2raw/build-${{matrix.arch.name}} --config ${{env.BUILD_TYPE}}
 
+    - name: Debug Build Directory
+      # Debug step to confirm build directory existence before testing
+      run: |
+        echo "Checking build directory for ${{matrix.arch.name}}:"
+        ls -la /home/runner/work/udp2raw/udp2raw/build-${{matrix.arch.name}} || echo "Build directory not found"
+
     - name: Test
-      working-directory: /home/runner/work/udp2raw/udp2raw/build-${{matrix.arch.name}}
       # Execute tests defined by the CMake configuration (skip for ARM64 if testing is not feasible)
       if: matrix.arch.name == 'x86_64'  # Tests may not run on cross-compiled ARM64 builds without emulation
+      working-directory: /home/runner/work/udp2raw/udp2raw/build-${{matrix.arch.name}}
       run: ctest -C ${{env.BUILD_TYPE}} || echo "Tests skipped for cross-build or failed non-fatally"
 
     - name: Package Build Artifacts
