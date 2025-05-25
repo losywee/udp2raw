@@ -119,18 +119,20 @@ jobs:
         ls -la artifacts/ || echo "No files in artifacts directory"
         tar -czvf udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz artifacts
         mv udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz ../../udp2raw/
+        echo "Confirming tarball location after mv:"
+        ls -lh ../../udp2raw/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz || echo "Tarball not found at expected location"
 
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: udp2raw-build-${{matrix.arch.name}}
-        path: "$(pwd)/udp2raw/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz"
+        path: udp2raw/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz
         if-no-files-found: warn
 
     - name: Debug Uploaded Artifacts
       run: |
         echo "Listing artifact files for ${{matrix.arch.name}}:"
-        ls -lh "$(pwd)/udp2raw/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz" || echo "Artifact file not found"
+        ls -lh udp2raw/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz || echo "Artifact file not found"
 
   release:
     needs: build
