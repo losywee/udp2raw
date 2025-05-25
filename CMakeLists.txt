@@ -1,155 +1,35 @@
-# This workflow is for a CMake project with cross-platform support for x86_64 and ARM64.
-name: CMake with Cross-Platform Build
+#note: experimental
+#      currently only used for generating `compile_commands.json` for clangd.
+#      to build this project, it's suggested to use `makefile` instead
 
-on:
-  push:
-    branches: [ "fake-http" ]
-    tags: [ "v*" ]  # Trigger release on tags starting with 'v' (e.g., v1.0.0)
-  pull_request:
-    branches: [ "fake-http" ]
+cmake_minimum_required(VERSION 3.7)
+project(udp2raw)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-env:
-  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
-  BUILD_TYPE: Release
+set(CMAKE_CXX_STANDARD 11)
 
-jobs:
-  build:
-    # Build for multiple architectures using a matrix strategy
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch:
-          - { name: "x86_64", target: "x86_64-linux-gnu", toolchain: "", extra_cmake_args: "" }
-          - { name: "arm64", target: "aarch64-linux-gnu", toolchain: "aarch64-linux-gnu", extra_cmake_args: "-DCMAKE_TOOLCHAIN_FILE=/home/runner/work/udp2raw/udp2raw/toolchain-aarch64.cmake" }
+set(SOURCE_FILES
+        main.cpp 
+        lib/md5.cpp
+        lib/pbkdf2-sha1.cpp
+        lib/pbkdf2-sha256.cpp
+        encrypt.cpp
+        log.cpp
+        network.cpp
+        common.cpp
+        connection.cpp
+        misc.cpp
+        fd_manager.cpp
+        client.cpp
+        server.cpp
+        lib/aes_faster_c/aes.cpp
+        lib/aes_faster_c/wrapper.cpp
+        my_ev.cpp
+)
+set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wno-unused-variable -Wno-unused-parameter -Wno-missing-field-initializers -O2 -g -fsanitize=address,undefined")
 
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Fetch full Git history to support potential git version generation
-
-
-    - name: Install Build Essentials and Cross-Compilation Tools
-      # Install build tools and toolchain for ARM64
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential make gcc g++ gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
-
-    - name: Debug Toolchain and Build Tools Availability
-      # Check if ARM64 compilers and make are installed
-      run: |
-        echo "Checking for build tools and compilers:"
-        which make || echo "make not found"
-        make --version || echo "make version check failed"
-        which gcc || echo "gcc not found"
-        which g++ || echo "g++ not found"
-        which aarch64-linux-gnu-gcc || echo "aarch64-linux-gnu-gcc not found"
-        which aarch64-linux-gnu-g++ || echo "aarch64-linux-gnu-g++ not found"
-        aarch64-linux-gnu-gcc --version || echo "aarch64-linux-gnu-gcc version check failed"
-        aarch64-linux-gnu-g++ --version || echo "aarch64-linux-gnu-g++ version check failed"
-
-    - name: Create Toolchain File for ARM64
-      # Create a toolchain file for cross-compiling to ARM64
-      if: matrix.arch.name == 'arm64'
-      run: |
-        cat > /home/runner/work/udp2raw/udp2raw/toolchain-aarch64.cmake << EOF
-        set(CMAKE_SYSTEM_NAME Linux)
-        set(CMAKE_SYSTEM_PROCESSOR aarch64)
-        set(CMAKE_C_COMPILER /usr/bin/aarch64-linux-gnu-gcc)
-        set(CMAKE_CXX_COMPILER /usr/bin/aarch64-linux-gnu-g++)
-        set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-        set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
-        set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-        EOF
-        echo "Toolchain file created at:"
-        ls -l /home/runner/work/udp2raw/udp2raw/toolchain-aarch64.cmake
-
-    - name: Configure CMake
-      # Configure CMake for the specified architecture with explicit generator
-      run: |
-        mkdir -p /home/runner/work/udp2raw/udp2raw/build-${{matrix.arch.name}}
-        cmake -B /home/runner/work/udp2raw/udp2raw/build-${{matrix.arch.name}} \
-              -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
-              -G "Unix Makefiles" \
-              ${{matrix.arch.extra_cmake_args}} || { echo "CMake configuration failed for ${{matrix.arch.name}}"; exit 1; }
-
-    - name: Build
-      # Build your program with the given configuration for the specified architecture
-      run: cmake --build /home/runner/work/udp2raw/udp2raw/build-${{matrix.arch.name}} --config ${{env.BUILD_TYPE}}
-
-    - name: Test
-      working-directory: /home/runner/work/udp2raw/udp2raw/build-${{matrix.arch.name}}
-      # Execute tests defined by the CMake configuration (skip for ARM64 if testing is not feasible)
-      if: matrix.arch.name == 'x86_64'  # Tests may not run on cross-compiled ARM64 builds without emulation
-      run: ctest -C ${{env.BUILD_TYPE}} || echo "Tests skipped for cross-build or failed non-fatally"
-
-    - name: Package Build Artifacts
-      # Archive the build output (e.g., binaries) for release or further use
-      working-directory: /home/runner/work/udp2raw/udp2raw/build-${{matrix.arch.name}}
-      run: |
-        mkdir -p artifacts
-        # Adjust the following line based on the actual binary/output files produced by your build
-        cp udp2raw* artifacts/ 2>/dev/null || echo "Binary not found, adjust cp command as needed"
-        tar -czvf udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz artifacts
-        mv udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz /home/runner/work/udp2raw/udp2raw/
-
-    - name: Upload Build Artifacts
-      # Upload the packaged artifacts for download or use in release
-      uses: actions/upload-artifact@v4
-      with:
-        name: udp2raw-build-${{matrix.arch.name}}
-        path: /home/runner/work/udp2raw/udp2raw/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz
-        if-no-files-found: warn  # Warn instead of fail if no files are found to upload
-
-    - name: Debug Uploaded Artifacts
-      # Debug step to list files being uploaded for troubleshooting
-      run: |
-        echo "Listing artifact files for ${{matrix.arch.name}}:"
-        ls -lh /home/runner/work/udp2raw/udp2raw/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz || echo "Artifact file not found"
-
-  release:
-    # Only create a release if the event is a push to a tag starting with 'v'
-    needs: build
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    permissions:
-      contents: write  # Required to create a release
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Download Build Artifacts for x86_64
-      uses: actions/download-artifact@v4
-      with:
-        name: udp2raw-build-x86_64
-        path: /home/runner/work/udp2raw/udp2raw/artifacts/
-      continue-on-error: true  # Continue even if download fails for debugging
-
-    - name: Download Build Artifacts for ARM64
-      uses: actions/download-artifact@v4
-      with:
-        name: udp2raw-build-arm64
-        path: /home/runner/work/udp2raw/udp2raw/artifacts/
-      continue-on-error: true  # Continue even if download fails for debugging
-
-    - name: Debug Downloaded Artifacts
-      # Debug step to list downloaded files for troubleshooting
-      run: |
-        echo "Listing downloaded artifacts:"
-        ls -lh /home/runner/work/udp2raw/udp2raw/artifacts/ || echo "No artifacts downloaded"
-
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
-      if: success()  # Only run if previous steps succeed or are allowed to continue
-      with:
-        files: |
-          /home/runner/work/udp2raw/udp2raw/artifacts/udp2raw-x86_64-*.tar.gz
-          /home/runner/work/udp2raw/udp2raw/artifacts/udp2raw-arm64-*.tar.gz
-        draft: false
-        prerelease: false
-        body: |
-          Automated release for tag ${{github.ref_name}}.
-          This release includes build artifacts for udp2raw on the following architectures:
-          - x86_64
-          - ARM64 (aarch64)
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+add_executable(udp2raw ${SOURCE_FILES})
+target_link_libraries(udp2raw rt)
+target_link_libraries(udp2raw pthread)
+include_directories(SYSTEM "libev")
+include_directories(".")
