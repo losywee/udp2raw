@@ -10,7 +10,6 @@ on:
 
 env:
   BUILD_TYPE: Release
-  WORK_DIR: "${{ github.workspace }}/udp2raw"
 
 jobs:
   build:
@@ -21,7 +20,7 @@ jobs:
       matrix:
         arch:
           - { name: "x86_64", target: "x86_64-linux-gnu", toolchain: "", extra_cmake_args: "" }
-          - { name: "arm64", target: "aarch64-linux-gnu", toolchain: "aarch64-linux-gnu", extra_cmake_args: "-DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/udp2raw/toolchain-aarch64.cmake" }
+          - { name: "arm64", target: "aarch64-linux-gnu", toolchain: "aarch64-linux-gnu", extra_cmake_args: "-DCMAKE_TOOLCHAIN_FILE=$(pwd)/udp2raw/toolchain-aarch64.cmake" }
 
     steps:
     - uses: actions/checkout@v4
@@ -32,19 +31,19 @@ jobs:
 
     - name: Create Working Directories
       run: |
-        mkdir -p "${{ env.WORK_DIR }}/build-${{matrix.arch.name}}"
-        echo "Created working directory: ${{ env.WORK_DIR }}"
+        mkdir -p "$(pwd)/udp2raw/build-${{matrix.arch.name}}"
+        echo "Created working directory: $(pwd)/udp2raw"
 
     - name: Debug Directory Structure After Checkout
       run: |
         echo "Current working directory: $(pwd)"
         ls -la
-        echo "Listing contents of ${{ github.workspace }}:"
-        ls -la "${{ github.workspace }}" || echo "Workspace directory not found"
-        echo "Listing contents of ${{ github.workspace }}/udp2raw:"
-        ls -la "${{ github.workspace }}/udp2raw" || echo "Source directory not found"
-        echo "Checking for CMakeLists.txt in ${{ github.workspace }}/udp2raw:"
-        ls -l "${{ github.workspace }}/udp2raw/CMakeLists.txt" || echo "CMakeLists.txt not found in ${{ github.workspace }}/udp2raw"
+        echo "Listing contents of $(pwd):"
+        ls -la "$(pwd)" || echo "Base directory not found"
+        echo "Listing contents of $(pwd)/udp2raw:"
+        ls -la "$(pwd)/udp2raw" || echo "Source directory not found"
+        echo "Checking for CMakeLists.txt in $(pwd)/udp2raw:"
+        ls -l "$(pwd)/udp2raw/CMakeLists.txt" || echo "CMakeLists.txt not found in $(pwd)/udp2raw"
         echo "Checking alternative paths for CMakeLists.txt:"
         find /__w/ -name "CMakeLists.txt" -type f || echo "CMakeLists.txt not found in /__w/"
         find /home/runner/work/ -name "CMakeLists.txt" -type f || echo "CMakeLists.txt not found in /home/runner/work/"
@@ -72,7 +71,7 @@ jobs:
     - name: Create Toolchain File for ARM64
       if: matrix.arch.name == 'arm64'
       run: |
-        cat > "${{ env.WORK_DIR }}/toolchain-aarch64.cmake" << EOF
+        cat > "$(pwd)/udp2raw/toolchain-aarch64.cmake" << EOF
         set(CMAKE_SYSTEM_NAME Linux)
         set(CMAKE_SYSTEM_PROCESSOR aarch64)
         set(CMAKE_C_COMPILER /usr/bin/aarch64-linux-gnu-gcc)
@@ -82,12 +81,12 @@ jobs:
         set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
         EOF
         echo "Toolchain file created at:"
-        ls -l "${{ env.WORK_DIR }}/toolchain-aarch64.cmake"
+        ls -l "$(pwd)/udp2raw/toolchain-aarch64.cmake"
 
     - name: Configure CMake
       run: |
-        cmake -S "${{ github.workspace }}/udp2raw" \
-              -B "${{ env.WORK_DIR }}/build-${{matrix.arch.name}}" \
+        cmake -S "$(pwd)/udp2raw" \
+              -B "$(pwd)/udp2raw/build-${{matrix.arch.name}}" \
               -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
               -G "Unix Makefiles" \
               -DCMAKE_C_FLAGS="-fno-sanitize=address" \
@@ -96,37 +95,37 @@ jobs:
               ${{matrix.arch.extra_cmake_args}} || { echo "CMake configuration failed for ${{matrix.arch.name}}"; exit 1; }
 
     - name: Build
-      run: cmake --build "${{ env.WORK_DIR }}/build-${{matrix.arch.name}}" --config ${{env.BUILD_TYPE}}
+      run: cmake --build "$(pwd)/udp2raw/build-${{matrix.arch.name}}" --config ${{env.BUILD_TYPE}}
 
     - name: Debug Build Directory
       run: |
         echo "Checking build directory for ${{matrix.arch.name}}:"
-        ls -la "${{ env.WORK_DIR }}/build-${{matrix.arch.name}}" || echo "Build directory not found"
+        ls -la "$(pwd)/udp2raw/build-${{matrix.arch.name}}" || echo "Build directory not found"
 
     - name: Test
       if: matrix.arch.name == 'x86_64'
-      working-directory: "${{ env.WORK_DIR }}/build-${{matrix.arch.name}}"
+      working-directory: "$(pwd)/udp2raw/build-${{matrix.arch.name}}"
       run: ctest -C ${{env.BUILD_TYPE}} || echo "Tests skipped for cross-build or failed non-fatally"
 
     - name: Package Build Artifacts
-      working-directory: "${{ env.WORK_DIR }}/build-${{matrix.arch.name}}"
+      working-directory: "$(pwd)/udp2raw/build-${{matrix.arch.name}}"
       run: |
         mkdir -p artifacts
         cp udp2raw* artifacts/ 2>/dev/null || echo "Binary not found, adjust cp command as needed"
         tar -czvf udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz artifacts
-        mv udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz "${{ env.WORK_DIR }}/"
+        mv udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz "$(pwd)/udp2raw/"
 
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: udp2raw-build-${{matrix.arch.name}}
-        path: "${{ env.WORK_DIR }}/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz"
+        path: "$(pwd)/udp2raw/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz"
         if-no-files-found: warn
 
     - name: Debug Uploaded Artifacts
       run: |
         echo "Listing artifact files for ${{matrix.arch.name}}:"
-        ls -lh "${{ env.WORK_DIR }}/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz" || echo "Artifact file not found"
+        ls -lh "$(pwd)/udp2raw/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz" || echo "Artifact file not found"
 
   release:
     needs: build
@@ -145,8 +144,8 @@ jobs:
 
     - name: Create Working Directories for Release
       run: |
-        mkdir -p "${{ env.WORK_DIR }}/artifacts"
-        echo "Created artifacts directory: ${{ env.WORK_DIR }}/artifacts"
+        mkdir -p "$(pwd)/udp2raw/artifacts"
+        echo "Created artifacts directory: $(pwd)/udp2raw/artifacts"
 
     - name: Install Dependencies for Release Job
       run: |
@@ -157,28 +156,28 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: udp2raw-build-x86_64
-        path: "${{ env.WORK_DIR }}/artifacts/"
+        path: "$(pwd)/udp2raw/artifacts/"
       continue-on-error: true
 
     - name: Download Build Artifacts for ARM64
       uses: actions/download-artifact@v4
       with:
         name: udp2raw-build-arm64
-        path: "${{ env.WORK_DIR }}/artifacts/"
+        path: "$(pwd)/udp2raw/artifacts/"
       continue-on-error: true
 
     - name: Debug Downloaded Artifacts
       run: |
         echo "Listing downloaded artifacts:"
-        ls -lh "${{ env.WORK_DIR }}/artifacts/" || echo "No artifacts downloaded"
+        ls -lh "$(pwd)/udp2raw/artifacts/" || echo "No artifacts downloaded"
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       if: success()
       with:
         files: |
-          ${{ env.WORK_DIR }}/artifacts/udp2raw-x86_64-*.tar.gz
-          ${{ env.WORK_DIR }}/artifacts/udp2raw-arm64-*.tar.gz
+          $(pwd)/udp2raw/artifacts/udp2raw-x86_64-*.tar.gz
+          $(pwd)/udp2raw/artifacts/udp2raw-arm64-*.tar.gz
         draft: false
         prerelease: false
         body: |
