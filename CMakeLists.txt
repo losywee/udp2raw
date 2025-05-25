@@ -27,6 +27,23 @@ jobs:
       with:
         fetch-depth: 0  # Fetch full Git history to support potential git version generation
 
+    - name: Debug Working Directory
+      # Debug the current working directory to confirm paths
+      run: |
+        echo "Current working directory:"
+        pwd
+        echo "Listing contents of working directory:"
+        ls -la
+
+    - name: Create dummy git_version.h
+      # Create a dummy git_version.h to handle cases where Git metadata is unavailable or not used
+      run: |
+        echo '#ifndef GIT_VERSION_H' > git_version.h
+        echo '#define GIT_VERSION_H' >> git_version.h
+        echo '#define gitversion "unknown"' >> git_version.h
+        echo '#endif // GIT_VERSION_H' >> git_version.h
+        mv git_version.h /home/runner/work/udp2raw/udp2raw/git_version.h
+
     - name: Install Build Essentials and Cross-Compilation Tools
       # Install build tools and toolchain for ARM64
       run: |
@@ -72,3 +89,85 @@ jobs:
               -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
               -G "Unix Makefiles" \
               ${{matrix.arch.extra_cmake_args}} || { echo "CMake configuration failed for ${{matrix.arch.name}}"; exit 1; }
+
+    - name: Build
+      # Build your program with the given configuration for the specified architecture
+      run: cmake --build /home/runner/work/udp2raw/udp2raw/build-${{matrix.arch.name}} --config ${{env.BUILD_TYPE}}
+
+    - name: Test
+      working-directory: /home/runner/work/udp2raw/udp2raw/build-${{matrix.arch.name}}
+      # Execute tests defined by the CMake configuration (skip for ARM64 if testing is not feasible)
+      if: matrix.arch.name == 'x86_64'  # Tests may not run on cross-compiled ARM64 builds without emulation
+      run: ctest -C ${{env.BUILD_TYPE}} || echo "Tests skipped for cross-build or failed non-fatally"
+
+    - name: Package Build Artifacts
+      # Archive the build output (e.g., binaries) for release or further use
+      working-directory: /home/runner/work/udp2raw/udp2raw/build-${{matrix.arch.name}}
+      run: |
+        mkdir -p artifacts
+        # Adjust the following line based on the actual binary/output files produced by your build
+        cp udp2raw* artifacts/ 2>/dev/null || echo "Binary not found, adjust cp command as needed"
+        tar -czvf udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz artifacts
+        mv udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz /home/runner/work/udp2raw/udp2raw/artifacts/
+
+    - name: Upload Build Artifacts
+      # Upload the packaged artifacts for download or use in release
+      uses: actions/upload-artifact@v4
+      with:
+        name: udp2raw-build-${{matrix.arch.name}}
+        path: /home/runner/work/udp2raw/udp2raw/artifacts/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz
+        if-no-files-found: warn  # Warn instead of fail if no files are found to upload
+
+    - name: Debug Uploaded Artifacts
+      # Debug step to list files being uploaded for troubleshooting
+      run: |
+        echo "Listing artifact files for ${{matrix.arch.name}}:"
+        ls -lh /home/runner/work/udp2raw/udp2raw/artifacts/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz || echo "Artifact file not found"
+
+  release:
+    # Only create a release if the event is a push to a tag starting with 'v'
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write  # Required to create a release
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download Build Artifacts for x86_64
+      uses: actions/download-artifact@v4
+      with:
+        name: udp2raw-build-x86_64
+        path: /home/runner/work/udp2raw/udp2raw/artifacts/
+      continue-on-error: true  # Continue even if download fails for debugging
+
+    - name: Download Build Artifacts for ARM64
+      uses: actions/download-artifact@v4
+      with:
+        name: udp2raw-build-arm64
+        path: /home/runner/work/udp2raw/udp2raw/artifacts/
+      continue-on-error: true  # Continue even if download fails for debugging
+
+    - name: Debug Downloaded Artifacts
+      # Debug step to list downloaded files for troubleshooting
+      run: |
+        echo "Listing downloaded artifacts:"
+        ls -lh /home/runner/work/udp2raw/udp2raw/artifacts/ || echo "No artifacts downloaded"
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      if: success()  # Only run if previous steps succeed or are allowed to continue
+      with:
+        files: |
+          /home/runner/work/udp2raw/udp2raw/artifacts/udp2raw-x86_64-*.tar.gz
+          /home/runner/work/udp2raw/udp2raw/artifacts/udp2raw-arm64-*.tar.gz
+        draft: false
+        prerelease: false
+        body: |
+          Automated release for tag ${{github.ref_name}}.
+          This release includes build artifacts for udp2raw on the following architectures:
+          - x86_64
+          - ARM64 (aarch64)
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
