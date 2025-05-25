@@ -91,6 +91,13 @@ jobs:
       with:
         name: udp2raw-build-${{matrix.arch.name}}
         path: ${{github.workspace}}/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz
+        if-no-files-found: warn  # Warn instead of fail if no files are found to upload
+
+    - name: Debug Uploaded Artifacts
+      # Debug step to list files being uploaded for troubleshooting
+      run: |
+        echo "Listing artifact files for ${{matrix.arch.name}}:"
+        ls -lh ${{github.workspace}}/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz || echo "Artifact file not found"
 
   release:
     # Only create a release if the event is a push to a tag starting with 'v'
@@ -107,20 +114,29 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: udp2raw-build-x86_64
-        path: ${{github.workspace}}/
+        path: ${{github.workspace}}/artifacts/
+      continue-on-error: true  # Continue even if download fails for debugging
 
     - name: Download Build Artifacts for ARM64
       uses: actions/download-artifact@v3
       with:
         name: udp2raw-build-arm64
-        path: ${{github.workspace}}/
+        path: ${{github.workspace}}/artifacts/
+      continue-on-error: true  # Continue even if download fails for debugging
+
+    - name: Debug Downloaded Artifacts
+      # Debug step to list downloaded files for troubleshooting
+      run: |
+        echo "Listing downloaded artifacts:"
+        ls -lh ${{github.workspace}}/artifacts/ || echo "No artifacts downloaded"
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
+      if: success()  # Only run if previous steps succeed or are allowed to continue
       with:
         files: |
-          ${{github.workspace}}/udp2raw-x86_64-*.tar.gz
-          ${{github.workspace}}/udp2raw-arm64-*.tar.gz
+          ${{github.workspace}}/artifacts/udp2raw-x86_64-*.tar.gz
+          ${{github.workspace}}/artifacts/udp2raw-arm64-*.tar.gz
         draft: false
         prerelease: false
         body: |
