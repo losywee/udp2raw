@@ -87,7 +87,7 @@ jobs:
 
     - name: Upload Build Artifacts
       # Upload the packaged artifacts for download or use in release
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: udp2raw-build-${{matrix.arch.name}}
         path: ${{github.workspace}}/udp2raw-${{matrix.arch.name}}-${{github.sha}}.tar.gz
