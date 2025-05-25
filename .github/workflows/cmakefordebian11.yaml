@@ -89,12 +89,6 @@ jobs:
               -B "$(pwd)/udp2raw/build-${{matrix.arch.name}}" \
               -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
               -G "Unix Makefiles" \
-              -DCMAKE_C_FLAGS="-fno-sanitize=all" \
-              -DCMAKE_CXX_FLAGS="-fno-sanitize=all" \
-              -DCMAKE_EXE_LINKER_FLAGS="-fno-sanitize=all" \
-              -DENABLE_ASAN=OFF \
-              -DENABLE_SANITIZERS=OFF \
-              -DSANITIZE_ADDRESS=OFF \
               ${{matrix.arch.extra_cmake_args}} || { echo "CMake configuration failed for ${{matrix.arch.name}}"; exit 1; }
         # Debug: Print CMake cache to check sanitizer settings
         echo "Dumping CMake cache for debugging:"
@@ -103,9 +97,6 @@ jobs:
     - name: Build
       run: |
         cmake --build "$(pwd)/udp2raw/build-${{matrix.arch.name}}" --config ${{env.BUILD_TYPE}} --verbose
-        # Debug: Check if sanitizer flags are present in build commands
-        echo "Checking build commands for sanitizer flags:"
-        grep -i "sanitize" "$(pwd)/udp2raw/build-${{matrix.arch.name}}/CMakeFiles/udp2raw.dir/*.txt" || echo "No sanitizer flags found in build commands"
 
     - name: Debug Build Directory
       run: |
