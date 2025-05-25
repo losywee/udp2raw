@@ -30,19 +30,21 @@ jobs:
         fetch-depth: 0  # Fetch full Git history to support potential git version generation
 
     - name: Install Build Essentials and Cross-Compilation Tools
-      # Install build tools and toolchain for ARM64
+      # Install build tools, CMake, and toolchain for ARM64
       run: |
         apt-get update
-        apt-get install -y build-essential make gcc g++ gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
+        apt-get install -y build-essential make gcc g++ cmake gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
 
     - name: Debug Toolchain and Build Tools Availability
-      # Check if ARM64 compilers and make are installed
+      # Check if ARM64 compilers, make, and CMake are installed
       run: |
         echo "Checking for build tools and compilers:"
         which make || echo "make not found"
         make --version || echo "make version check failed"
         which gcc || echo "gcc not found"
         which g++ || echo "g++ not found"
+        which cmake || echo "cmake not found"
+        cmake --version || echo "cmake version check failed"
         which aarch64-linux-gnu-gcc || echo "aarch64-linux-gnu-gcc not found"
         which aarch64-linux-gnu-g++ || echo "aarch64-linux-gnu-g++ not found"
         aarch64-linux-gnu-gcc --version || echo "aarch64-linux-gnu-gcc version check failed"
