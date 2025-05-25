@@ -126,7 +126,7 @@ int process_lower_level_arg()  // handle --lower-level option
 #endif
 void print_help() {
     char git_version_buf[100] = {0};
-    strncpy(git_version_buf, gitversion, 10);
+    strncpy(git_version_buf, "unknown", 10);
     printf("udp2raw-tunnel\n");
     printf("git version:%s    ", git_version_buf);
     printf("build date:%s %s\n", __DATE__, __TIME__);
