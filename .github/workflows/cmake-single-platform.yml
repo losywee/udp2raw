@@ -29,6 +29,11 @@ jobs:
       with:
         fetch-depth: 0  # Fetch full Git history to support potential git version generation
 
+    - name: Create Working Directories
+      # Ensure the directory structure exists for toolchain and build files
+      run: |
+        mkdir -p /home/runner/work/udp2raw/udp2raw
+
     - name: Install Build Essentials and Cross-Compilation Tools
       # Install build tools, CMake, and toolchain for ARM64
       run: |
@@ -121,6 +126,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Create Working Directories for Release
+      # Ensure the directory structure exists for artifacts
+      run: |
+        mkdir -p /home/runner/work/udp2raw/udp2raw/artifacts
 
     - name: Install Dependencies for Release Job
       run: |
