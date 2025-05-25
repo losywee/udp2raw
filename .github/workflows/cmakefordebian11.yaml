@@ -1,5 +1,5 @@
 # This workflow is for a CMake project with cross-platform support for x86_64 and ARM64.
-name: CMake with Cross-Platform Build
+name: CMake with Cross-Platform Build Ubuntu 24.04
 
 on:
   push:
@@ -15,7 +15,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: debian:bullseye
+      image: ubuntu:24.04
     strategy:
       matrix:
         arch:
@@ -138,7 +138,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     container:
-      image: debian:bullseye
+      image: ubuntu:24.04
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
